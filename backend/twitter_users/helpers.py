@@ -4,51 +4,54 @@ from collections import Counter
 
 import twitter
 from django.conf import settings
+from django.db.utils import IntegrityError
 from django.utils import timezone
 
 from .models import TwitterUser, SecondLineFollowersCounter
 
-api = twitter.Api(
-    consumer_key=settings.TWITTER_API_KEY,
-    consumer_secret=settings.TWITTER_API_SECRET,
-    access_token_key=settings.TWITTER_ACCESS_TOKEN,
-    access_token_secret=settings.TWITTER_ACCESS_TOKEN_SECRET,
-    sleep_on_rate_limit=True,
-)
-api.InitializeRateLimit()
+
 
 
 def get_second_line_followers(handle, followers_slice):
+    api = twitter.Api(
+        consumer_key=settings.TWITTER_API_KEY,
+        consumer_secret=settings.TWITTER_API_SECRET,
+        access_token_key=settings.TWITTER_ACCESS_TOKEN,
+        access_token_secret=settings.TWITTER_ACCESS_TOKEN_SECRET,
+        sleep_on_rate_limit=True,
+    )
+    api.InitializeRateLimit()
 
-    user = check_or_update_single_user({"screen_name": handle})
+    user = check_or_update_single_user({"screen_name": handle}, api)
 
     counted = get_lookup_bulk(
-        user.followers_ids[:followers_slice] if followers_slice else user.followers_ids
+        user.followers_ids[:followers_slice] if followers_slice else user.followers_ids, api
     )
-
+    print(user.screen_name, user.user_id)
     second, created = SecondLineFollowersCounter.objects.update_or_create(
-        screen_name=user.screen_name, user_id=user.user_id
+        screen_name=user.screen_name, defaults={'user_id': user.user_id}
     )
     second_line_dict = {}
     counted_users = TwitterUser.objects.filter(user_id__in=counted.keys())
     for counted_user in counted_users:
-        second_line_dict[counted_user.twitter_handle] = counted.pop(
-            counted_user.twitter_id, 0
+        second_line_dict[counted_user.screen_name] = counted.pop(
+            counted_user.user_id, 0
         )
 
-    lookuped_users = get_user_lookups(list(counted.keys()))
+    lookuped_users = get_user_lookups(list(counted.keys()), api)
     for user in lookuped_users:
-        second_line_dict[user.twitter_handle] = counted.get(user.twitter_id, 0)
+        second_line_dict[user.screen_name] = counted.get(user.user_id, 0)
 
     second.followers = second_line_dict
     second.save()
     return second
 
 
-def check_or_update_single_user(twitter_data, get_followers=True):
+def check_or_update_single_user(twitter_data, api, get_followers=True):
     print(twitter_data.get("screen_name"), " ", twitter_data.get("user_id"))
 
-    user, created = TwitterUser.objects.update_or_create(**twitter_data)
+    user, created = TwitterUser.objects.update_or_create(screen_name=twitter_data.get('screen_name'), defaults=twitter_data)
+
     if created or (not user.user_id or not user.screen_name):
         data = api.GetUser(**twitter_data)
         user.twitter_id = data.id
@@ -63,7 +66,7 @@ def check_or_update_single_user(twitter_data, get_followers=True):
         while True:
             try:
                 next_cursor, prev_cursor, data = api.GetFollowerIDsPaged(
-                    screen_name=user.twitter_handle, cursor=cursor
+                    screen_name=user.screen_name, cursor=cursor
                 )
                 result.extend([x for x in data])
 
@@ -78,7 +81,7 @@ def check_or_update_single_user(twitter_data, get_followers=True):
     return user
 
 
-def get_lookup_bulk(ids):
+def get_lookup_bulk(ids, api):
     populated_users = []
     counter = Counter()
 
@@ -87,7 +90,7 @@ def get_lookup_bulk(ids):
             users = api.UsersLookup(ids[100 * part:100 * (part + 1)])
             for user in users:
                 populated_user = check_or_update_single_user(
-                    {"screen_name": user.screen_name, "user_id": user.id}
+                    {"screen_name": user.screen_name, "user_id": user.id}, api
                 )
                 populated_users.append(populated_user)
         for u in populated_users:
@@ -96,7 +99,7 @@ def get_lookup_bulk(ids):
     return dict(counter)
 
 
-def get_user_lookups(ids):
+def get_user_lookups(ids, api):
     populated_users = []
 
     if ids:
@@ -104,8 +107,8 @@ def get_user_lookups(ids):
             users = api.UsersLookup(ids[100 * part:100 * (part + 1)])
             for user in users:
                 populated_user = check_or_update_single_user(
-                    {"screen_name": user.screen_name, "user_id": user.id},
-                    get_followers=False,
+                    {"screen_name": user.screen_name, "user_id": user.id}, api,
+                    get_followers=False
                 )
                 populated_users.append(populated_user)
     return populated_users
