@@ -1,16 +1,31 @@
-import React from "react";
-import { connect } from "react-redux";
+import React, {Component} from "react";
+import {connect} from "react-redux";
+
+class Followers extends Component {
+    render() {
+        let followers = [];
+        this.props.followers.map((el, key) => {
+            followers.push(<li className="list-group-item" key={key}>
+                {key}: {el}
+            </li>)
+        });
+        return (
+            <ul className="list-group list-group-flush">
+                {followers}
+            </ul>
+        );
+    }
+}
+
 const mapStateToProps = state => {
-  return { articles: state.articles };
+    return {followers: state.get('followers')};
 };
-const ConnectedList = ({ articles }) => (
-  <ul className="list-group list-group-flush">
-    {articles.map(el => (
-      <li className="list-group-item" key={el.id}>
-        {el.title}
-      </li>
-    ))}
-  </ul>
-);
-const List = connect(mapStateToProps)(ConnectedList);
-export default List;
+
+export function mapDispatchToProps(dispatch) {
+    return {
+        dispatch,
+    };
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(Followers);
+
