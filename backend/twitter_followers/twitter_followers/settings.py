@@ -16,6 +16,10 @@ import environ
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 root = environ.Path(__file__)
+print(BASE_DIR)
+print(root)
+two_up = os.path.join(BASE_DIR, '../..')
+print(two_up)
 env = environ.Env(DEBUG=(bool, False))
 environ.Env.read_env()
 # Quick-start development settings - unsuitable for production
@@ -26,7 +30,7 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG")
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [env('ALLOWED_HOSTS')]
 
 
 # Application definition
@@ -46,6 +50,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     "django.contrib.sessions.middleware.SessionMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -60,7 +65,7 @@ ROOT_URLCONF = "twitter_followers.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [os.path.join(two_up, 'frontend', 'build')],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -117,6 +122,12 @@ USE_TZ = True
 
 STATIC_URL = "/static/"
 
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+STATICFILES_DIRS = [
+    os.path.join(two_up, 'frontend', 'build', 'static'),
+]
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
+
 REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 10,
@@ -134,7 +145,6 @@ CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Warsaw'
 CELERYD_CONCURRENCY = 1
-# CELERYD_FORCE_EXECV = True
 
 
 CORS_ORIGIN_ALLOW_ALL=True
