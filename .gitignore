@@ -105,3 +105,5 @@ venv.bak/
 celerybeat-schedule.db
 node_modules
 .idea
+#FIXME added to git ignore because of travis build
+package-lock.json
