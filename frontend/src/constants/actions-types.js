@@ -1,0 +1,1 @@
+export const UPDATE_FOLLOWERS = "UPDATE_FOLLOWERS";
