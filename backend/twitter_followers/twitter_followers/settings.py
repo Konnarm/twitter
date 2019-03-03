@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/1.11/ref/settings/
 """
 
 import os
+
 import environ
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
@@ -32,7 +33,6 @@ DEBUG = env("DEBUG")
 
 ALLOWED_HOSTS = [env('ALLOWED_HOSTS')]
 
-
 # Application definition
 
 INSTALLED_APPS = [
@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "twitter_users",
     "rest_framework",
+    "django_nose"
 ]
 
 MIDDLEWARE = [
@@ -80,7 +81,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "twitter_followers.wsgi.application"
 
-
 # Database
 # https://docs.djangoproject.com/en/1.11/ref/settings/#databases
 
@@ -88,7 +88,6 @@ DATABASES = {
     "default": env.db(),  # Raises ImproperlyConfigured exception if DATABASE_URL not in os.environ
     # 'extra': env.db('SQLITE_URL', default='sqlite:////tmp/my-tmp-sqlite.db')
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/1.11/ref/settings/#auth-password-validators
@@ -102,7 +101,6 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/1.11/topics/i18n/
 
@@ -115,7 +113,6 @@ USE_I18N = True
 USE_L10N = True
 
 USE_TZ = True
-
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/1.11/howto/static-files/
@@ -146,9 +143,14 @@ CELERY_TASK_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'Europe/Warsaw'
 CELERYD_CONCURRENCY = 1
 
-
-CORS_ORIGIN_ALLOW_ALL=True
+CORS_ORIGIN_ALLOW_ALL = True
 
 CORS_ALLOW_METHODS = (
     'GET',
 )
+
+TEST_RUNNER = 'django_nose.NoseTestSuiteRunner'
+PUSHER_APP_ID = env("PUSHER_APP_ID")
+PUSHER_KEY = env("PUSHER_KEY")
+PUSHER_SECRET = env("PUSHER_SECRET")
+PUSHER_CLUSTER = env("PUSHER_CLUSTER")

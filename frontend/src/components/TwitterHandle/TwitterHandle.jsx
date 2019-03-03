@@ -1,6 +1,7 @@
 import React, {Component} from "react";
 import {connect} from "react-redux";
-import {updateFollowers} from "../../actions/index";
+import {updateFollowers, updateFollowersWebsocket} from "../../actions/index";
+import Pusher from 'pusher-js';
 
 class SearchInput extends Component {
     constructor() {
@@ -24,9 +25,31 @@ class SearchInput extends Component {
     }
 
     handleSubmit(event) {
-        event.preventDefault()
-        debugger
-        this.props.dispatch(updateFollowers(this.state.handle, this.state.slice))
+        event.preventDefault();
+        this.props.dispatch(updateFollowers(this.state.handle, this.state.slice));
+        if (this.channel !== undefined) {
+            this.channel.unbind();
+
+            this.pusher.unsubscribe(this.channel);
+        }
+        if (this.channel === undefined) {
+            this.channel = this.pusher.subscribe(this.state.handle);
+            this.channel.bind('followers_update', data => this.props.dispatch(updateFollowersWebsocket(data)));
+        }
+
+    }
+
+    componentWillUnmount() {
+        this.channel.unbind();
+
+        this.pusher.unsubscribe(this.channel);
+    }
+
+    componentDidMount() {
+        this.pusher = new Pusher(process.env.REACT_APP_PUSHER_API_KEY, {
+            cluster: 'eu',
+            forceTLS: true
+        });
     }
 
     render() {

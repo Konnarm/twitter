@@ -1,7 +1,10 @@
 from django.contrib.postgres.fields import ArrayField, JSONField
 from django.db import models
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
+from twitter_users import pusher_client
 
 
 class BaseTwitterData(TimeStampedModel):
@@ -24,3 +27,8 @@ class TwitterUser(BaseTwitterData):
 
 class SecondLineFollowersCounter(BaseTwitterData):
     followers = JSONField(verbose_name=_("followers"), null=True)
+
+
+@receiver(post_save, sender=SecondLineFollowersCounter)
+def update_frontend(sender, instance, created, **kwargs):
+    pusher_client.trigger(instance.screen_name, 'followers_update', instance.followers)

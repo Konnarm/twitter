@@ -4,11 +4,11 @@ import {connect} from "react-redux";
 class Followers extends Component {
     render() {
         let followers = [];
-        this.props.followers.map((el, key) => {
+        this.props.followers.map((el, key) =>
             followers.push(<li className="list-group-item" key={key}>
                 {key}: {el}
             </li>)
-        });
+        );
         return (
             <ul className="list-group list-group-flush">
                 {followers}

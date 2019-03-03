@@ -9,3 +9,11 @@ export function updateFollowers(handle, slice) {
         return {type: UPDATE_FOLLOWERS, payload};
     }
 }
+
+export function updateFollowersWebsocket(payload) {
+    return dispatch => dispatch(success(payload));
+
+    function success(payload) {
+        return {type: UPDATE_FOLLOWERS, payload};
+    }
+}

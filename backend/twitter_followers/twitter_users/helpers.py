@@ -1,4 +1,5 @@
 import math
+import signal
 from _datetime import timedelta
 from collections import Counter
 
@@ -10,105 +11,115 @@ from django.utils import timezone
 from .models import TwitterUser, SecondLineFollowersCounter
 
 
+class CustomTwitterApi(twitter.Api):
+    pass
+    # TODO: timer should be set on every twitter request so it updates followers if rate limit reached,
+    #  but it is not working somehow
+    # def _RequestUrl(self, url, verb, data=None, json=None, enforce_auth=True):
+    #     signal.setitimer(signal.ITIMER_VIRTUAL, 15)
+    #     return super()._RequestUrl(url, verb, data=None, json=None, enforce_auth=True)
 
 
-def get_second_line_followers(handle, followers_slice):
-    api = twitter.Api(
-        consumer_key=settings.TWITTER_API_KEY,
-        consumer_secret=settings.TWITTER_API_SECRET,
-        access_token_key=settings.TWITTER_ACCESS_TOKEN,
-        access_token_secret=settings.TWITTER_ACCESS_TOKEN_SECRET,
-        sleep_on_rate_limit=True,
-    )
-    api.InitializeRateLimit()
+class HandleTwitter:
+    def __init__(self, handle, followers_slice):
+        self.handle = handle
+        self.followers_slice = followers_slice
+        self.user = None
+        self.second_line_followers = None
+        self.api = CustomTwitterApi(
+            consumer_key=settings.TWITTER_API_KEY,
+            consumer_secret=settings.TWITTER_API_SECRET,
+            access_token_key=settings.TWITTER_ACCESS_TOKEN,
+            access_token_secret=settings.TWITTER_ACCESS_TOKEN_SECRET,
+            sleep_on_rate_limit=True,
+        )
+        self.counter = Counter()
+        signal.signal(signal.SIGALRM, self.process_followers)
 
-    user = check_or_update_single_user({"screen_name": handle}, api)
+    def get_second_line_followers(self):
 
-    counted = get_lookup_bulk(
-        user.followers_ids[:followers_slice] if followers_slice else user.followers_ids, api
-    )
-    print(user.screen_name, user.user_id)
-    second, created = SecondLineFollowersCounter.objects.update_or_create(
-        screen_name=user.screen_name, defaults={'user_id': user.user_id}
-    )
-    second_line_dict = {}
-    counted_users = TwitterUser.objects.filter(user_id__in=counted.keys())
-    for counted_user in counted_users:
-        second_line_dict[counted_user.screen_name] = counted.pop(
-            counted_user.user_id, 0
+        self.api.InitializeRateLimit()
+
+        self.user = self.check_or_update_single_user({"screen_name": self.handle})
+
+        self.second_line_followers, created = SecondLineFollowersCounter.objects.update_or_create(
+            screen_name=self.user.screen_name, defaults={'user_id': self.user.user_id}
         )
 
-    lookuped_users = get_user_lookups(list(counted.keys()), api)
-    for user in lookuped_users:
-        second_line_dict[user.screen_name] = counted.get(user.user_id, 0)
+        self.get_lookup_bulk(
+            self.user.followers_ids[:self.followers_slice] if self.followers_slice else self.user.followers_ids
+        )
+        self.process_followers()
 
-    second.followers = second_line_dict
-    second.save()
-    return second
+    def check_or_update_single_user(self, twitter_data, get_followers=True):
+        signal.setitimer(signal.ITIMER_REAL, 15)
 
-
-def check_or_update_single_user(twitter_data, api, get_followers=True):
-    print(twitter_data.get("screen_name"), " ", twitter_data.get("user_id"))
-
-    user, created = TwitterUser.objects.update_or_create(screen_name=twitter_data.get('screen_name'), defaults=twitter_data)
-
-    if created or (not user.user_id or not user.screen_name):
-        data = api.GetUser(**twitter_data)
-        user.twitter_id = data.id
-        user.twitter_handle = data.screen_name
-    if (
-        (user.modified < timezone.now() - timedelta(days=1))
-        or created
-        or (not user.followers_ids and get_followers)
-    ):
-        result = []
-        cursor = -1
-        while True:
+        print(twitter_data.get("screen_name"), " ", twitter_data.get("user_id"))
+        user_id = twitter_data.get('user_id')
+        if user_id:
             try:
-                next_cursor, prev_cursor, data = api.GetFollowerIDsPaged(
-                    screen_name=user.screen_name, cursor=cursor
-                )
-                result.extend([x for x in data])
+                user, created = TwitterUser.objects.update_or_create(user_id=user_id, defaults=twitter_data)
+            except IntegrityError:
+                user, created = TwitterUser.objects.update_or_create(screen_name=twitter_data.get('screen_name'),
+                                                                     defaults=twitter_data)
+        else:
+            user, created = TwitterUser.objects.update_or_create(screen_name=twitter_data.get('screen_name'),
+                                                                 defaults=twitter_data)
 
-                if next_cursor == 0 or next_cursor == prev_cursor:
+        if created or (not user.user_id or not user.screen_name):
+            data = self.api.GetUser(**twitter_data)
+            user.twitter_id = data.id
+            user.twitter_handle = data.screen_name
+        if (
+                (user.modified < timezone.now() - timedelta(days=1))
+                or created
+                or (not user.followers_ids and get_followers)
+        ):
+            result = []
+            cursor = -1
+            while True:
+                try:
+                    next_cursor, prev_cursor, data = self.api.GetFollowerIDsPaged(
+                        screen_name=user.screen_name, cursor=cursor
+                    )
+                    result.extend([x for x in data])
+
+                    if next_cursor == 0 or next_cursor == prev_cursor:
+                        break
+                    else:
+                        cursor = next_cursor
+                except twitter.TwitterError:
                     break
-                else:
-                    cursor = next_cursor
-            except twitter.TwitterError:
-                break
-        user.followers_ids = result
-    user.save()
-    return user
+            user.followers_ids = result
+        user.save()
+        return user
 
+    def get_lookup_bulk(self, ids):
+        if ids:
+            for part in range(math.ceil(len(ids) / 100)):
+                signal.setitimer(signal.ITIMER_REAL, 15)
+                users = self.api.UsersLookup(ids[100 * part:100 * (part + 1)])
+                for user in users:
+                    populated_user = self.check_or_update_single_user(
+                        {"screen_name": user.screen_name, "user_id": user.id}
+                    )
+                    self.get_user_lookups(populated_user.followers_ids)
 
-def get_lookup_bulk(ids, api):
-    populated_users = []
-    counter = Counter()
+    def get_user_lookups(self, ids):
+        if ids:
+            for part in range(math.ceil(len(ids) / 100)):
+                signal.setitimer(signal.ITIMER_REAL, 15)
+                users = self.api.UsersLookup(ids[100 * part:100 * (part + 1)])
+                for user in users:
+                    populated_user = self.check_or_update_single_user(
+                        {"screen_name": user.screen_name, "user_id": user.id},
+                        get_followers=False
+                    )
+                    if populated_user.id not in self.user.followers_ids and populated_user.id != self.user.id and populated_user.screen_name != self.user.screen_name:
+                        self.counter += Counter([populated_user.screen_name])
 
-    if ids:
-        for part in range(math.ceil(len(ids) / 100)):
-            users = api.UsersLookup(ids[100 * part:100 * (part + 1)])
-            for user in users:
-                populated_user = check_or_update_single_user(
-                    {"screen_name": user.screen_name, "user_id": user.id}, api
-                )
-                populated_users.append(populated_user)
-        for u in populated_users:
-            counter += Counter(u.followers_ids)
-
-    return dict(counter)
-
-
-def get_user_lookups(ids, api):
-    populated_users = []
-
-    if ids:
-        for part in range(math.ceil(len(ids) / 100)):
-            users = api.UsersLookup(ids[100 * part:100 * (part + 1)])
-            for user in users:
-                populated_user = check_or_update_single_user(
-                    {"screen_name": user.screen_name, "user_id": user.id}, api,
-                    get_followers=False
-                )
-                populated_users.append(populated_user)
-    return populated_users
+    def process_followers(self, *args):
+        counted = dict(self.counter)
+        if self.second_line_followers:
+            self.second_line_followers.followers = counted
+            self.second_line_followers.save()
