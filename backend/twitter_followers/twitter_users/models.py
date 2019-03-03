@@ -6,6 +6,8 @@ from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from twitter_users import pusher_client
 
+# TODO: metaclassy
+
 
 class BaseTwitterData(TimeStampedModel):
     screen_name = models.CharField(
