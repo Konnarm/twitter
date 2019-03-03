@@ -1,0 +1,23 @@
+language: python
+python:
+  - "3.6"
+install:
+  - cd backend/twitter_followers
+  - pip install -r requirements.txt
+services:
+  - postgresql
+  - redis-server
+addons:
+  postgresql: "9.4"
+jobs:
+  include:
+    - stage: deploy to production
+      before_script:
+        - psql -c 'create database travis_ci_test;' -U postgres
+        - ./manage.py migrate
+      script: coverage run --source='.' manage.py test
+      after_success: coverage report
+      deploy: &heroku
+        provider: heroku
+        app: followersoffollowers
+        api_key: $HEROKU_AUTH_TOKEN
