@@ -30,7 +30,8 @@ class SearchInput extends Component {
         if (this.channel !== undefined) {
             this.channel.unbind();
 
-            this.pusher.unsubscribe(this.channel);
+            this.pusher.unsubscribe(this.channel.name);
+            this.channel = undefined;
         }
         if (this.channel === undefined) {
             this.channel = this.pusher.subscribe(this.state.handle);

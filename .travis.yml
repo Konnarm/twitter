@@ -15,6 +15,8 @@ jobs:
       before_script:
         - psql -c 'create database travis_ci_test;' -U postgres
         - ./manage.py migrate
+        - cd ../../frontend && npm install && npm run build
+        - cd ../backend/twitter_followers
       script: coverage run --source='.' manage.py test
       after_success: coverage report
       deploy: &heroku
