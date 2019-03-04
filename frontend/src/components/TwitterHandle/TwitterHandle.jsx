@@ -59,7 +59,7 @@ class SearchInput extends Component {
                 Twitter Handle
                 <input type={"text"} name="handle" value={this.state.handle}
                        onChange={this.handleTwitterHandleChange.bind(this)}/>
-                Followers slice(optional)
+                Followers slice(optional: 0 to process all followers, 1 or more to fetch data for first or more followers)
                 <input type={"number"} name="slice" value={this.state.followersSlice}
                        onChange={this.handleSliceChange.bind(this)}/>
                 <input type="submit" value="Find"/>

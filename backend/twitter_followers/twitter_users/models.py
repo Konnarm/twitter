@@ -6,7 +6,7 @@ from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from twitter_users import pusher_client
 
-# TODO: metaclassy
+# TODO: add metaclasses
 
 
 class BaseTwitterData(TimeStampedModel):
@@ -22,15 +22,26 @@ class BaseTwitterData(TimeStampedModel):
 
 
 class TwitterUser(BaseTwitterData):
+    """
+        Represents single user object
+    """
+
     followers_ids = ArrayField(
         models.BigIntegerField(), verbose_name=_("followers ids"), null=True
     )
 
 
 class SecondLineFollowersCounter(BaseTwitterData):
+    """
+        Represents second line followers object
+    """
+
     followers = JSONField(verbose_name=_("followers"), null=True)
 
 
 @receiver(post_save, sender=SecondLineFollowersCounter)
 def update_frontend(sender, instance, created, **kwargs):
-    pusher_client.trigger(instance.screen_name, 'followers_update', instance.followers)
+    """
+        Sends new data to frontend via Pusher service
+    """
+    pusher_client.trigger(instance.screen_name, "followers_update", instance.followers)
