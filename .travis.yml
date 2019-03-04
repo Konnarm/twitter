@@ -18,7 +18,7 @@ jobs:
         - cd ../../frontend && npm install && npm run build
         - cd ../backend/twitter_followers
       script: coverage run --source='.' manage.py test
-      after_success: coverage report
+      after_success: coverage report && cd ../..
       deploy: &heroku
         provider: heroku
         app: followersoffollowers
